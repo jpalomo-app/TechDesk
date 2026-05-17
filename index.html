@@ -61,8 +61,8 @@ Guardar y generar PDF
 Guardar cliente
 </button></div></div></div><div class="mo" id="mo-det" onclick="if(event.target===this)closeMO('mo-det')"><div class="modal" style="max-width:580px"><div class="mhdr"><span class="mttl" id="det-ttl">Orden</span><button class="xbtn" onclick="closeMO('mo-det')">×</button></div><div class="mbdy" id="det-body"></div><div class="mftr" id="det-ftr"></div></div></div><script>
 const ST = {
-api: localStorage.getItem('td_api')||'https://script.google.com/macros/s/AKfycbyzTN4TfQK7hkU9oMyxnqrMXb8bgAr3T4dMOh8677ij3iJVgdf7KfUFcuLCme5jrVzI/exec',
-nom: localStorage.getItem('td_nom')||'JM Informática ',
+api: localStorage.getItem('td_api')||'https://script.google.com/macros/s/AKfycbyv-unU09RiqIzbS40VLE_XhguBw92-2PGyh3bQQTel4ym3Z1rrcmV7REG1IcQsYm3E/exec',
+nom: localStorage.getItem('td_nom')||'JM Informática',
 ini: localStorage.getItem('td_ini')||'JM',
 slg: localStorage.getItem('td_slg')||'Servicio Técnico Profesional',
 tareas:[],clientes:[],stats:{},aiHist:[],chartsOk:false,
@@ -495,35 +495,35 @@ const m = {
 return '<span class="badge ' + (m[estado]||'bx') + '">' + estado + '</span>';
 }
 function renderPresupuestos(lista) {
-const wrap = document.getElementById('lista-presupuestos');
-if (!wrap) return;
-if (!lista.length) {
-wrap.innerHTML = '<div class="empty"><p>No hay presupuestos registrados.</p></div>';
-return;
+  const wrap = document.getElementById('lista-presupuestos');
+  if (!wrap) return;
+  if (!lista.length) { wrap.innerHTML = '<div class="empty"><p>No hay presupuestos registrados.</p></div>'; return; }
+  wrap.innerHTML = '';
+  const hoy = new Date();
+  lista.forEach(function(p) {
+    const vence = p.FECHA_VENCIMIENTO ? new Date(p.FECHA_VENCIMIENTO) : null;
+    const dias = vence ? Math.ceil((vence - hoy) / (1000*60*60*24)) : null;
+    const venceStr = !vence||isNaN(vence) ? '' : dias < 0 ? 'Vencido' : dias === 0 ? 'Vence hoy' : 'Vence en ' + dias + ' dias';
+    const card = document.createElement('div');
+    card.className = 'pres-card';
+    card.addEventListener('click', function() { verPresupuesto(p.ID); });
+    const hdr = document.createElement('div'); hdr.className = 'pres-card-hdr';
+    const info = document.createElement('div');
+    const ttl = document.createElement('div'); ttl.className = 'pres-card-title'; ttl.textContent = p.DESCRIPCION || 'Sin descripcion';
+    const sub2 = document.createElement('div'); sub2.className = 'pres-card-sub'; sub2.textContent = (p['CLIENTE NOMBRE']||'-') + ' - ' + (p.FECHA||'');
+    info.appendChild(ttl); info.appendChild(sub2);
+    const bdg = document.createElement('span');
+    const bmap = {'Pendiente de aprobacion':'ba','Pendiente de aprobación':'ba','Aprobado':'bg','Rechazado':'br','Vencido':'bx'};
+    bdg.className = 'badge ' + (bmap[p.ESTADO]||'bx'); bdg.textContent = p.ESTADO;
+    hdr.appendChild(info); hdr.appendChild(bdg);
+    const ftr2 = document.createElement('div'); ftr2.className = 'pres-card-ftr';
+    const mnt = document.createElement('span'); mnt.className = 'pres-monto'; mnt.textContent = '$ ' + parseFloat(p.MONTO||0).toLocaleString('es-AR');
+    const vcl = document.createElement('span'); vcl.className = 'pres-vence' + (dias!==null&&dias<=0?' vencido':''); vcl.textContent = venceStr;
+    ftr2.appendChild(mnt); ftr2.appendChild(vcl);
+    card.appendChild(hdr); card.appendChild(ftr2); wrap.appendChild(card);
+  });
 }
-const hoy = new Date();
-wrap.innerHTML = lista.map(p => {
-const vence = p.FECHA_VENCIMIENTO ? new Date(p.FECHA_VENCIMIENTO) : null;
-const diasRestantes = vence ? Math.ceil((vence - hoy) / (1000*60*60*24)) : null;
-const venceStr = vence && !isNaN(vence)
-? (diasRestantes < 0 ? 'Vencido' : diasRestantes === 0 ? 'Vence hoy' : 'Vence en ' + diasRestantes + ' día' + (diasRestantes !== 1 ? 's' : ''))
-: '';
-const venceCls = diasRestantes !== null && diasRestantes <= 0 ? 'vencido' : '';
-return '<div class="pres-card" onclick="verPresupuesto('' + p.ID + '')">' +
-'<div class="pres-card-hdr">' +
-'<div>' +
-'<div class="pres-card-title">' + (p.DESCRIPCION||'Sin descripción') + '</div>' +
-'<div class="pres-card-sub">' + (p['CLIENTE NOMBRE']||'—') + ' · ' + (p.FECHA||'') + '</div>' +
-'</div>' +
-badgePres(p.ESTADO) +
-'</div>' +
-'<div class="pres-card-ftr">' +
-'<span class="pres-monto">$ ' + parseFloat(p.MONTO||0).toLocaleString('es-AR') + '</span>' +
-'<span class="pres-vence ' + venceCls + '">' + venceStr + '</span>' +
-'</div>' +
-'</div>';
-}).join('');
-}
+
 function filtrarPres() {
 const q = (document.getElementById('f-pres')?.value || '').toLowerCase();
 const estado = document.getElementById('f-pres-estado')?.value || '';
@@ -559,31 +559,23 @@ badgePres(p.ESTADO) +
 '<span class="total-lbl">Monto presupuestado</span>' +
 '<span class="total-val">$ ' + parseFloat(p.MONTO||0).toLocaleString('es-AR') + '</span>' +
 '</div>';
-let acciones = '';
-if (p.ESTADO === 'Pendiente de aprobación') {
-acciones +=
-'<button class="btn btn-g" onclick="cambiarEstadoPres('' + id + '','Aprobado')">' +
-'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' +
-'Aprobar' +
-'</button>' +
-'<button class="btn btn-d" onclick="cambiarEstadoPres('' + id + '','Rechazado')">' +
-'Rechazar' +
-'</button>';
-}
-if (p.ESTADO === 'Aprobado') {
-acciones +=
-'<button class="btn btn-g" onclick="convertirEnOrden('' + id + '')">' +
-'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>' +
-'Convertir en orden' +
-'</button>';
-}
-acciones +=
-'<button class="btn btn-o" onclick="enviarWAPres('' + id + '')">' +
-'Enviar por WA' +
-'</button>' +
-'<button class="btn btn-o" onclick="closeMO('mo-pres-det')">Cerrar</button>';
-document.getElementById('pres-det-ftr').innerHTML = acciones;
-openMO('mo-pres-det');
+const ftrEl = document.getElementById('pres-det-ftr');
+  ftrEl.innerHTML = '';
+  if (p.ESTADO === 'Pendiente de aprobacion' || p.ESTADO === 'Pendiente de aprobación') {
+    const bApr = document.createElement('button'); bApr.className = 'btn btn-g'; bApr.textContent = 'Aprobar';
+    bApr.addEventListener('click', function() { cambiarEstadoPres(id, 'Aprobado'); }); ftrEl.appendChild(bApr);
+    const bRec = document.createElement('button'); bRec.className = 'btn btn-d'; bRec.textContent = 'Rechazar';
+    bRec.addEventListener('click', function() { cambiarEstadoPres(id, 'Rechazado'); }); ftrEl.appendChild(bRec);
+  }
+  if (p.ESTADO === 'Aprobado') {
+    const bConv = document.createElement('button'); bConv.className = 'btn btn-g'; bConv.textContent = 'Convertir en orden';
+    bConv.addEventListener('click', function() { convertirEnOrden(id); }); ftrEl.appendChild(bConv);
+  }
+  const bWA2 = document.createElement('button'); bWA2.className = 'btn btn-o'; bWA2.textContent = 'Enviar por WA';
+  bWA2.addEventListener('click', function() { enviarWAPres(id); }); ftrEl.appendChild(bWA2);
+  const bCerrar2 = document.createElement('button'); bCerrar2.className = 'btn btn-o'; bCerrar2.textContent = 'Cerrar';
+  bCerrar2.addEventListener('click', function() { closeMO('mo-pres-det'); }); ftrEl.appendChild(bCerrar2);
+  openMO('mo-pres-det');
 }
 async function crearPresupuesto() {
 const cliId = document.getElementById('p-cli-id').value;
