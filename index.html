@@ -217,7 +217,6 @@ function api(action, body) {
       resolve(null);
     }
   });
-}catch(e){console.warn('API',e);return null;}
 }
 async function loadStats(){
 const d=await api('getStats');
