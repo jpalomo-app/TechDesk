@@ -59,7 +59,833 @@ Config
 Guardar y generar PDF
 </button></div></div></div><div class="mo" id="mo-cliente" onclick="if(event.target===this)closeMO('mo-cliente')"><div class="modal"><div class="mhdr"><span class="mttl">Nuevo cliente</span><button class="xbtn" onclick="closeMO('mo-cliente')">×</button></div><div class="mbdy"><div class="form-grp"><label class="form-lbl">Nombre completo / empresa</label><input class="form-in" id="c-nom" placeholder="Ej: María González"></div><div class="form-grp"><label class="form-lbl">Tipo</label><select class="form-sel" id="c-tipo"><option>Cliente particular</option><option>Empresa</option><option>Institución educativa</option><option>Otro</option></select></div><div class="form-g2"><div class="form-grp"><label class="form-lbl">Teléfono / WhatsApp</label><input class="form-in" id="c-tel" placeholder="+549..." type="tel"></div><div class="form-grp"><label class="form-lbl">Email (opcional)</label><input class="form-in" id="c-mail" placeholder="mail@ejemplo.com" type="email"></div></div><div class="form-grp"><label class="form-lbl">Dirección (opcional)</label><input class="form-in" id="c-dir" placeholder="Calle 123, ciudad"></div><div class="form-grp"><label class="form-lbl">Notas internas</label><textarea class="form-ta" id="c-notas" placeholder="Preferencias, referencias..." style="min-height:60px"></textarea></div></div><div class="mftr"><button class="btn btn-o" onclick="closeMO('mo-cliente')">Cancelar</button><button class="btn btn-g" onclick="crearCliente()"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
 Guardar cliente
-</button></div></div></div><div class="mo" id="mo-det" onclick="if(event.target===this)closeMO('mo-det')"><div class="modal" style="max-width:580px"><div class="mhdr"><span class="mttl" id="det-ttl">Orden</span><button class="xbtn" onclick="closeMO('mo-det')">×</button></div><div class="mbdy" id="det-body"></div><div class="mftr" id="det-ftr"></div></div></div><?!= include("Codigo") ?><script>const manifest = {
+</button></div></div></div><div class="mo" id="mo-det" onclick="if(event.target===this)closeMO('mo-det')"><div class="modal" style="max-width:580px"><div class="mhdr"><span class="mttl" id="det-ttl">Orden</span><button class="xbtn" onclick="closeMO('mo-det')">×</button></div><div class="mbdy" id="det-body"></div><div class="mftr" id="det-ftr"></div></div></div><script>
+const ST = {
+api: localStorage.getItem('td_api')||'https://script.google.com/macros/s/AKfycbzQHG-bDazjF9bby2XeGx-tUX6i2RiHYlqO6qIhqFi1yy016DdZAolvLItwVbB2mXZt/exec'',
+nom: localStorage.getItem('td_nom')||'JM Informática',
+ini: localStorage.getItem('td_ini')||'JM',
+slg: localStorage.getItem('td_slg')||'Servicio Técnico Profesional',
+tareas:[],clientes:[],stats:{},aiHist:[],chartsOk:false,
+usuario:null
+};
+addEventListener('DOMContentLoaded',()=>{
+const sesion=localStorage.getItem('td_sesion');
+if(sesion){
+try{ ST.usuario=JSON.parse(sesion); iniciarApp(); }
+catch(_){ mostrarLogin(); }
+} else { mostrarLogin(); }
+});
+function mostrarLogin(){
+document.getElementById('login-screen').style.display='flex';
+document.getElementById('main-app').style.display='none';
+setTimeout(()=>{ const u=document.getElementById('login-user'); if(u) u.focus(); },150);
+}
+function iniciarApp(){
+document.getElementById('login-screen').style.display='none';
+document.getElementById('main-app').style.display='flex';
+const u=ST.usuario;
+if(u){
+document.getElementById('uav').textContent=u.iniciales||(u.usuario||'??').substring(0,2).toUpperCase();
+document.getElementById('unm').textContent=u.nombre||u.usuario||'Usuario';
+const navUsuarios=document.getElementById('nav-usuarios');
+if(navUsuarios) navUsuarios.style.display=u.rol==='admin'?'':'none';
+}
+loadCfgUI();
+updConn();
+if(ST.api){ document.getElementById('alert-wrap').innerHTML=''; loadAll(); }
+else showAlert();
+}
+async function doLogin(){
+const usuario=document.getElementById('login-user').value.trim();
+const pass=document.getElementById('login-pass').value;
+const err=document.getElementById('login-err');
+const btn=document.getElementById('login-btn');
+if(!usuario||!pass){ err.textContent='Completá usuario y contraseña.'; err.classList.add('show'); return; }
+err.classList.remove('show');
+btn.disabled=true; btn.textContent='Verificando...';
+let r=null;
+try{
+const url=ST.api+'?action=login&usuario='+encodeURIComponent(usuario)+'&pass='+encodeURIComponent(pass);
+const res=await fetch(url);
+r=await res.json();
+}catch(e){ r={ok:false,error:'Error de conexión'}; }
+btn.disabled=false; btn.textContent='Iniciar sesión';
+if(r&&r.ok&&r.usuario){
+ST.usuario=r.usuario;
+localStorage.setItem('td_sesion',JSON.stringify(r.usuario));
+iniciarApp();
+} else {
+err.textContent=r?.error||'Usuario o contraseña incorrectos';
+err.classList.add('show');
+document.getElementById('login-pass').value='';
+document.getElementById('login-pass').focus();
+}
+}
+function doLogout(){
+if(!confirm('¿Cerrar sesión?')) return;
+localStorage.removeItem('td_sesion');
+ST.usuario=null; ST.tareas=[]; ST.clientes=[]; ST.stats={};
+document.getElementById('login-user').value='';
+document.getElementById('login-pass').value='';
+mostrarLogin();
+}
+function togglePass(){
+const inp=document.getElementById('login-pass');
+inp.type=inp.type==='password'?'text':'password';
+}
+function loadCfgUI(){
+document.getElementById('cfg-url').value=ST.api;
+document.getElementById('cfg-nom').value=ST.nom;
+document.getElementById('cfg-ini').value=ST.ini;
+document.getElementById('cfg-slg').value=ST.slg;
+document.getElementById('uav').textContent=ST.ini;
+document.getElementById('unm').textContent=ST.nom;
+}
+async function loadAll(){
+await Promise.all([loadStats(),loadTareas(),loadClientes()]);
+mostrarNotifPendientes();
+}
+function goTo(id,btn){
+document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+document.querySelectorAll('.nav-btn,.mob-nb').forEach(b=>b.classList.remove('active'));
+const sc=document.getElementById('screen-'+id);
+if(sc){sc.classList.add('active')}
+if(btn) btn.classList.add('active');
+const sb=document.querySelector(`.nav-btn[onclick*="'${id}'"]`);
+const mb=document.getElementById('mn-'+id);
+if(sb) sb.classList.add('active');
+if(mb) mb.classList.add('active');
+const titles={dashboard:'Dashboard',ordenes:'Órdenes de servicio',clientes:'Clientes',
+reportes:'Reportes & analytics',ia:'IA Asistente',config:'Configuración'};
+document.getElementById('page-title').textContent=titles[id]||'';
+if(id==='reportes'&&!ST.chartsOk&&ST.stats.evolucion) initCharts();
+if(id==='presupuestos'){ cargarPresupuestos(); fillSelPresupuesto(); }
+if(id==='usuarios'){
+if(!ST.usuario||ST.usuario.rol!=='admin'){
+alert('Acceso restringido a administradores.');
+goTo('dashboard',null); return;
+}
+cargarUsuarios();
+}
+}
+function toggleSB(){
+const sb=document.getElementById('sidebar');
+sb.style.display=sb.style.display==='none'?'flex':'none';
+}
+async function api(action,body){
+if(!ST.api) return null;
+try{
+const opts=body
+?{method:'POST',body:JSON.stringify({action,...body})}
+:{method:'GET'};
+const url=body?ST.api:ST.api+'?action='+action;
+const r=await fetch(url,opts);
+return await r.json();
+}catch(e){console.warn('API',e);return null;}
+}
+async function loadStats(){
+const d=await api('getStats');
+if(!d||!d.stats) return;
+ST.stats=d.stats;
+const s=ST.stats;
+document.getElementById('s-facturado').textContent='$'+Math.round(s.totalFacturadoMes||0).toLocaleString('es-AR');
+document.getElementById('s-ordmes').textContent=s.tareasMes||0;
+document.getElementById('s-pend').textContent=s.porEstado?.Pendiente||0;
+document.getElementById('s-pend-sub').textContent='en proceso: '+(s.porEstado?.['En proceso']||0);
+renderTopCli(s.topClientes||[]);
+}
+async function loadTareas(){
+const d=await api('getTareas');
+if(!d) return;
+ST.tareas=d.tareas||[];
+const pend=ST.tareas.filter(t=>t.ESTADO==='Pendiente'&&t.ESTADO!=='Eliminado').length;
+document.getElementById('nb-ordenes').textContent=pend||'';
+const cliSet=new Set(ST.tareas.map(t=>t['CLIENTE NOMBRE']).filter(Boolean));
+document.getElementById('s-clientes').textContent=cliSet.size;
+renderTablaDash();
+renderTablaOrdenes(ST.tareas);
+fillSelCli();
+}
+async function loadClientes(){
+const d=await api('getClientes');
+if(!d) return;
+ST.clientes=d.clientes||[];
+renderClientes(ST.clientes);
+fillSelCli();
+fillSelPresupuesto();
+}
+function badgeHTML(estado){
+const m={Finalizada:'bg',Pendiente:'ba','En proceso':'bb',Eliminado:'br'};
+return`<span class="badge ${m[estado]||'bx'}">${estado||'—'}</span>`;
+}
+function renderTablaDash(){
+const rows=ST.tareas.filter(t=>t.ESTADO!=='Eliminado').slice(0,6);
+if(!rows.length){document.getElementById('dash-tabla').innerHTML='<div class="empty"><p>Sin órdenes aún.</p></div>';return;}
+document.getElementById('dash-tabla').innerHTML=`<table><thead><tr><th>Tarea</th><th>Cliente</th><th>Estado</th></tr></thead><tbody>${rows.map(t=>`<tr onclick="verOrden('${t.ID}')"><td class="td-main">${t['TAREA REALIZADA']||'—'}</td><td>${t['CLIENTE NOMBRE']||'—'}</td><td>${badgeHTML(t.ESTADO)}</td></tr>`).join('')}</tbody></table>`;
+}
+function renderTablaOrdenes(tareas){
+const rows=tareas.filter(t=>t.ESTADO!=='Eliminado');
+if(!rows.length){document.getElementById('tabla-ordenes').innerHTML='<div class="empty"><p>No hay órdenes que coincidan.</p></div>';return;}
+document.getElementById('tabla-ordenes').innerHTML=`<table><thead><tr><th>Tarea</th><th>Cliente</th><th>Fecha</th><th>Costo</th><th>Estado</th><th></th></tr></thead><tbody>${rows.map(t=>`<tr onclick="verOrden('${t.ID}')"><td class="td-main">${t['TAREA REALIZADA']||'—'}</td><td>${t['CLIENTE NOMBRE']||'—'}</td><td style="color:var(--t3);font-size:12px">${t.FECHA||'—'}</td><td>$ ${parseFloat(t.COSTOS||0).toLocaleString('es-AR')}</td><td>${badgeHTML(t.ESTADO)}</td><td onclick="event.stopPropagation()"><div style="display:flex;gap:5px">
+${t.PDF_URL?`<a href="${t.PDF_URL}" target="_blank" class="btn btn-o btn-xs btn-ico" title="PDF"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></a>`:''}
+<button class="btn btn-o btn-xs btn-ico" title="WhatsApp" onclick="envWA('${t.ID}')"><svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.01 1.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/></svg></button></div></td></tr>`).join('')}</tbody></table>`;
+}
+function filtrar(){
+const estado=document.getElementById('f-estado').value;
+const q=document.getElementById('f-busca').value.toLowerCase();
+renderTablaOrdenes(ST.tareas.filter(t=>{
+const mE=!estado||t.ESTADO===estado;
+const mQ=!q||(t['CLIENTE NOMBRE']||'').toLowerCase().includes(q)||(t['TAREA REALIZADA']||'').toLowerCase().includes(q);
+return mE&&mQ;
+}));
+}
+function verOrden(id){
+const t=ST.tareas.find(x=>x.ID===id);
+if(!t) return;
+document.getElementById('det-ttl').textContent=t['TAREA REALIZADA']||'Orden';
+document.getElementById('det-body').innerHTML=`
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+${badgeHTML(t.ESTADO)}
+<span class="td-mono">#${t.ID}</span></div><div style="background:var(--bg4);border-radius:var(--r);padding:14px;margin-bottom:12px"><div class="det-row"><span class="det-lbl">Cliente</span><span class="det-val">${t['CLIENTE NOMBRE']||'—'}</span></div><div class="det-row"><span class="det-lbl">Tipo</span><span class="det-val">${t['CLIENTE TIPO']||'—'}</span></div><div class="det-row"><span class="det-lbl">Fecha</span><span class="det-val">${t.FECHA||'—'}</span></div><div class="det-row"><span class="det-lbl">Teléfono</span><span class="det-val">${t.TELEFONO||'—'}</span></div><div class="det-row"><span class="det-lbl">Duración</span><span class="det-val">${t['DURACION HORAS']||'—'} hs</span></div></div><div style="background:var(--bg4);border-radius:var(--r);padding:14px;margin-bottom:12px"><div style="font-size:11px;color:var(--t4);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Descripción técnica</div><div style="font-size:13px;color:var(--t2);line-height:1.65">${t.DESCRIPCION||'Sin descripción.'}</div></div>
+${(t['MATERIALES USADOS']||'').split(',').filter(Boolean).length?`
+<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--t4);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Materiales</div><div style="display:flex;flex-wrap:wrap;gap:5px">
+${(t['MATERIALES USADOS']||'').split(',').filter(Boolean).map(m=>`<span class="badge bx">${m.trim()}</span>`).join('')}
+</div></div>`:''}
+<div class="total-box"><span class="total-lbl">Total del servicio</span><span class="total-val">$ ${parseFloat(t.COSTOS||0).toLocaleString('es-AR')}</span></div>`;
+document.getElementById('det-ftr').innerHTML=`
+${t.PDF_URL
+?`<a href="${t.PDF_URL}" target="_blank" class="btn btn-o"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+Ver PDF
+</a>`
+:`<button class="btn btn-o" onclick="genPDFDet('${id}')">Generar PDF</button>`}
+<button class="btn btn-o" onclick="envWA('${id}');closeMO('mo-det')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.01 1.18 2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 14.92z"/></svg>
+Enviar WhatsApp
+</button><button class="btn btn-g" onclick="abrirEdicion('${id}')"><svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+Editar
+</button>`;
+openMO('mo-det');
+}
+async function genPDFDet(id){
+const r=await api('generarPDF',{id});
+if(r?.pdfUrl){const t=ST.tareas.find(x=>x.ID===id);if(t)t.PDF_URL=r.pdfUrl;verOrden(id);}
+}
+function abrirEdicion(id){
+const t=ST.tareas.find(x=>x.ID===id);
+if(!t) return;
+closeMO('mo-det');
+document.getElementById('edit-id').value=id;
+document.getElementById('edit-estado').value=t.ESTADO||'Pendiente';
+document.getElementById('edit-tarea').value=t['TAREA REALIZADA']||'';
+document.getElementById('edit-desc').value=t.DESCRIPCION||'';
+document.getElementById('edit-mat').value=t['MATERIALES USADOS']||'';
+document.getElementById('edit-costo').value=t.COSTOS||0;
+document.getElementById('edit-hs').value=t['DURACION HORAS']||'';
+openMO('mo-edit');
+}
+async function guardarEdicion(){
+const id=document.getElementById('edit-id').value;
+const btn=document.getElementById('btn-guardar-edit');
+const body={
+id,
+estado: document.getElementById('edit-estado').value,
+tareaRealizada: document.getElementById('edit-tarea').value,
+descripcion: document.getElementById('edit-desc').value,
+materialesUsados: document.getElementById('edit-mat').value,
+costos: parseFloat(document.getElementById('edit-costo').value)||0,
+duracionHoras: parseFloat(document.getElementById('edit-hs').value)||0,
+};
+btn.textContent='Guardando...'; btn.disabled=true;
+const r=await api('editarTarea',body);
+btn.textContent='Guardar cambios'; btn.disabled=false;
+if(r&&r.ok!==false){
+const t=ST.tareas.find(x=>x.ID===id);
+if(t){
+t.ESTADO=body.estado;
+t['TAREA REALIZADA']=body.tareaRealizada;
+t.DESCRIPCION=body.descripcion;
+t['MATERIALES USADOS']=body.materialesUsados;
+t.COSTOS=body.costos;
+t['DURACION HORAS']=body.duracionHoras;
+}
+closeMO('mo-edit');
+renderTablaDash();
+renderTablaOrdenes(ST.tareas);
+loadStats();
+alert('Orden actualizada correctamente');
+} else {
+alert('Error al guardar. Intentá de nuevo.');
+}
+}
+async function envWA(id){
+const t=ST.tareas.find(x=>x.ID===id);
+if(!t) return;
+if(!t.PDF_URL){alert('Primero genera el PDF para esta orden.');return;}
+let tel=(t.TELEFONO||'').toString().trim().replace(/\s/g,'');
+if(!tel.startsWith('+')) tel='+'+tel;
+const telWA=tel.replace(/\D/g,'');
+const nombre=t['CLIENTE NOMBRE']||'cliente';
+const fecha=t.FECHA||'';
+const negocio=ST.nom||'el negocio';
+const mensaje='Hola '+nombre+'! Te comparto el informe tecnico del trabajo que realizamos el '+fecha+'. Gracias por confiar en '+negocio+', cualquier cosa estoy a disposicion.\n\n'+t.PDF_URL;
+const url='https://wa.me/'+telWA+'?text='+encodeURIComponent(mensaje);
+const existing=document.getElementById('wa-modal');
+if(existing) existing.remove();
+const modal=document.createElement('div');
+modal.id='wa-modal';
+modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+const inner=document.createElement('div');
+inner.style.cssText='background:#0D1612;border:1px solid rgba(24,255,138,.2);border-radius:16px;padding:24px;max-width:400px;width:100%';
+const ttl=document.createElement('div');
+ttl.style.cssText='font-size:15px;font-weight:700;color:#E2EDE7;margin-bottom:6px';
+ttl.textContent='Enviar por WhatsApp';
+const sub=document.createElement('div');
+sub.style.cssText='font-size:12px;color:#8AA898;margin-bottom:14px';
+sub.textContent='Para: '+nombre+' · '+tel;
+const preview=document.createElement('div');
+preview.style.cssText='background:#111A16;border:1px solid rgba(24,255,138,.1);border-radius:8px;padding:12px;font-size:12px;color:#8AA898;line-height:1.6;margin-bottom:16px;max-height:100px;overflow-y:auto;white-space:pre-wrap;word-break:break-all';
+preview.textContent=mensaje;
+const btnWA=document.createElement('a');
+btnWA.href=url;
+btnWA.target='_blank';
+btnWA.rel='noopener';
+btnWA.style.cssText='display:flex;align-items:center;justify-content:center;gap:8px;background:#1D9E75;color:#fff;font-weight:600;font-size:14px;padding:13px;border-radius:8px;text-decoration:none;margin-bottom:8px';
+btnWA.textContent='Abrir WhatsApp';
+btnWA.addEventListener('click',function(){setTimeout(function(){document.getElementById('wa-modal').remove();},400);});
+const btnX=document.createElement('button');
+btnX.style.cssText='width:100%;background:none;border:1px solid rgba(255,255,255,.15);color:#8AA898;font-size:13px;padding:10px;border-radius:8px;cursor:pointer';
+btnX.textContent='Cancelar';
+btnX.addEventListener('click',function(){modal.remove();});
+inner.appendChild(ttl);
+inner.appendChild(sub);
+inner.appendChild(preview);
+inner.appendChild(btnWA);
+inner.appendChild(btnX);
+modal.appendChild(inner);
+document.body.appendChild(modal);
+modal.addEventListener('click',function(e){if(e.target===modal) modal.remove();});
+}
+async function crearOrden(){
+const b={
+clienteId:document.getElementById('f-cli-id').value,
+clienteTipo:document.getElementById('f-cli-tipo').value,
+tareaRealizada:document.getElementById('f-tarea').value,
+materialesUsados:document.getElementById('f-mat').value,
+costos:parseFloat(document.getElementById('f-costo').value)||0,
+descripcion:document.getElementById('f-desc').value,
+duracionHoras:parseFloat(document.getElementById('f-hs').value)||0,
+estado:document.getElementById('f-est2').value,
+};
+if(!b.clienteId||!b.tareaRealizada){alert('Completá el cliente y la tarea.');return;}
+const btn=document.getElementById('btn-crear-orden');
+btn.textContent='Guardando...';btn.disabled=true;
+closeMO('mo-orden');
+const r=await api('crearTarea',b);
+btn.textContent='Guardar y generar PDF';btn.disabled=false;
+if(r?.ok){loadTareas();loadStats();alert(r.pdfUrl?'✓ Orden creada y PDF generado':'✓ Orden creada');}
+}
+function iniciales(nom){return(nom||'??').split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase()}
+function renderClientes(list){
+const wrap=document.getElementById('lista-cli');
+if(!list.length){wrap.innerHTML='<div class="empty"><p>No hay clientes.</p></div>';return;}
+wrap.innerHTML=list.map(c=>{
+const ini=iniciales(c.NOMBRE);
+const avCls=c.TIPO?.includes('Empresa')?'b2':c.TIPO?.includes('Inst')?'a2':'';
+const n=ST.tareas.filter(t=>t['CLIENTE NOMBRE']===c.NOMBRE).length;
+return`<div class="cli-card"><div class="av ${avCls}">${ini}</div><div style="flex:1"><div style="font-weight:600;color:var(--t)">${c.NOMBRE||'—'}</div><div style="font-size:12px;color:var(--t3)">${c.TIPO||''} · ${c.TELEFONO||''}</div></div><span class="badge bx">${n} orden${n!==1?'es':''}</span></div>`;
+}).join('');
+}
+function filtrarCli(){
+const q=document.getElementById('f-cli').value.toLowerCase();
+renderClientes(ST.clientes.filter(c=>(c.NOMBRE||'').toLowerCase().includes(q)||(c.TELEFONO||'').includes(q)));
+}
+function fillSelCli(){
+const sel=document.getElementById('f-cli-id');
+sel.innerHTML='<option value="">Seleccioná un cliente...</option>'+
+ST.clientes.map(c=>`<option value="${c.ID}">${c.NOMBRE}</option>`).join('');
+}
+async function crearCliente(){
+const b={
+nombre:document.getElementById('c-nom').value,
+tipo:document.getElementById('c-tipo').value,
+telefono:document.getElementById('c-tel').value,
+email:document.getElementById('c-mail').value,
+direccion:document.getElementById('c-dir').value,
+notas:document.getElementById('c-notas').value,
+};
+if(!b.nombre){alert('El nombre es obligatorio.');return;}
+closeMO('mo-cliente');
+const r=await api('crearCliente',b);
+if(r?.ok){loadClientes();alert('✓ Cliente creado');}
+}
+function renderTopCli(top){
+if(!top.length) return;
+const max=top[0]?.total||1;
+document.getElementById('dash-top-cli').innerHTML=top.map(c=>`
+<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:13px;font-weight:500;color:var(--t)">${c.nombre}</span><span style="font-size:13px;color:var(--g);font-weight:600">$ ${Math.round(c.total).toLocaleString('es-AR')}</span></div><div class="prog-bar"><div class="prog-fill" style="width:${Math.round(c.total/max*100)}%"></div></div></div>`).join('');
+}
+function initCharts(){
+if(ST.chartsOk) return;
+ST.chartsOk=true;
+const gc='rgba(24,255,138,.07)';const tc='#2E4A3E';
+const opts={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+scales:{x:{grid:{color:gc},ticks:{color:tc,font:{size:10}}},
+y:{grid:{color:gc},ticks:{color:tc,font:{size:10},callback:v=>'$'+Math.round(v/1000)+'K'}}}};
+const ev=ST.stats.evolucion||[];
+[document.getElementById('ch-evol'),document.getElementById('ch-evol2')].forEach(c=>{
+if(!c) return;
+new Chart(c,{type:'line',data:{labels:ev.map(e=>e.mes),datasets:[{data:ev.map(e=>e.total),
+borderColor:'#18FF8A',backgroundColor:'rgba(24,255,138,.07)',borderWidth:2,
+pointRadius:3,pointBackgroundColor:'#18FF8A',tension:.35,fill:true}]},options:{...opts}});
+});
+const top=ST.stats.topClientes||[];
+const cc=document.getElementById('ch-cli');
+if(cc) new Chart(cc,{type:'bar',data:{labels:top.map(c=>c.nombre),datasets:[{data:top.map(c=>c.total),
+backgroundColor:'rgba(24,255,138,.6)',borderRadius:6,borderSkipped:false}]},
+options:{...opts,indexAxis:'y',scales:{x:opts.scales.x,y:{...opts.scales.y,ticks:{color:tc,font:{size:10}}}}}});
+const est=ST.stats.porEstado||{};
+const dc=document.getElementById('ch-est');
+if(dc) new Chart(dc,{type:'doughnut',data:{
+labels:['Finalizadas','En proceso','Pendientes'],
+datasets:[{data:[est.Finalizada||0,est['En proceso']||0,est.Pendiente||0],
+backgroundColor:['rgba(24,255,138,.7)','rgba(77,158,255,.7)','rgba(255,176,32,.7)'],borderWidth:0}]},
+options:{responsive:true,maintainAspectRatio:false,cutout:'68%',
+plugins:{legend:{position:'bottom',labels:{color:tc,font:{size:10},padding:10}}}}});
+loadHist();
+}
+async function loadHist(){
+const d=await api('getHistorial');
+if(!d) return;
+const h=(d.historial||[]).slice(0,40);
+if(!h.length){document.getElementById('tabla-hist').innerHTML='<div class="empty"><p>Sin actividad registrada.</p></div>';return;}
+const tipo={CREADO:'bg',EDITADO:'bx',BORRADO:'br',WHATSAPP:'bb'};
+document.getElementById('tabla-hist').innerHTML=`<table><thead><tr><th>Fecha / hora</th><th>Evento</th><th>Registro</th><th>Detalle</th></tr></thead><tbody>${h.map(e=>{
+const f=e[1]||e.FECHA_HORA||'';
+const fs=f instanceof Date?f.toLocaleString('es-AR'):String(f).substring(0,16);
+const tp=e[3]||e.TIPO||'';
+return`<tr><td style="font-size:12px;color:var(--t3);font-family:var(--mono)">${fs}</td><td><span class="badge ${tipo[tp]||'bx'}">${tp}</span></td><td class="td-mono">${e[5]||e.ID_REGISTRO||'—'}</td><td style="font-size:12px;color:var(--t3)">${e[6]||e.CAMPO||'—'}</td></tr>`;}).join('')}</tbody></table>`;
+}
+let presupuestos = [];
+async function cargarPresupuestos() {
+const r = await api('getPresupuestos');
+if (!r) return;
+presupuestos = r.presupuestos || [];
+const hoy = new Date();
+presupuestos.forEach(p => {
+if (p.ESTADO === 'Pendiente de aprobación' && p.FECHA_VENCIMIENTO) {
+const vence = new Date(p.FECHA_VENCIMIENTO);
+if (!isNaN(vence) && vence < hoy) p.ESTADO = 'Vencido';
+}
+});
+renderPresupuestos(presupuestos);
+fillSelPresupuesto();
+}
+function fillSelPresupuesto() {
+const sel = document.getElementById('p-cli-id');
+if (!sel) return;
+sel.innerHTML = '<option value="">Seleccioná un cliente...</option>' +
+ST.clientes.map(c => '<option value="' + c.ID + '">' + c.NOMBRE + '</option>').join('');
+}
+function badgePres(estado) {
+const m = {
+'Pendiente de aprobación': 'ba',
+'Aprobado': 'bg',
+'Rechazado': 'br',
+'Vencido': 'bx'
+};
+return '<span class="badge ' + (m[estado]||'bx') + '">' + estado + '</span>';
+}
+function renderPresupuestos(lista) {
+const wrap = document.getElementById('lista-presupuestos');
+if (!wrap) return;
+if (!lista.length) {
+wrap.innerHTML = '<div class="empty"><p>No hay presupuestos registrados.</p></div>';
+return;
+}
+const hoy = new Date();
+wrap.innerHTML = lista.map(p => {
+const vence = p.FECHA_VENCIMIENTO ? new Date(p.FECHA_VENCIMIENTO) : null;
+const diasRestantes = vence ? Math.ceil((vence - hoy) / (1000*60*60*24)) : null;
+const venceStr = vence && !isNaN(vence)
+? (diasRestantes < 0 ? 'Vencido' : diasRestantes === 0 ? 'Vence hoy' : 'Vence en ' + diasRestantes + ' día' + (diasRestantes !== 1 ? 's' : ''))
+: '';
+const venceCls = diasRestantes !== null && diasRestantes <= 0 ? 'vencido' : '';
+return '<div class="pres-card" onclick="verPresupuesto('' + p.ID + '')">' +
+'<div class="pres-card-hdr">' +
+'<div>' +
+'<div class="pres-card-title">' + (p.DESCRIPCION||'Sin descripción') + '</div>' +
+'<div class="pres-card-sub">' + (p['CLIENTE NOMBRE']||'—') + ' · ' + (p.FECHA||'') + '</div>' +
+'</div>' +
+badgePres(p.ESTADO) +
+'</div>' +
+'<div class="pres-card-ftr">' +
+'<span class="pres-monto">$ ' + parseFloat(p.MONTO||0).toLocaleString('es-AR') + '</span>' +
+'<span class="pres-vence ' + venceCls + '">' + venceStr + '</span>' +
+'</div>' +
+'</div>';
+}).join('');
+}
+function filtrarPres() {
+const q = (document.getElementById('f-pres')?.value || '').toLowerCase();
+const estado = document.getElementById('f-pres-estado')?.value || '';
+const filtrados = presupuestos.filter(p => {
+const mQ = !q || (p['CLIENTE NOMBRE']||'').toLowerCase().includes(q) || (p.DESCRIPCION||'').toLowerCase().includes(q);
+const mE = !estado || p.ESTADO === estado;
+return mQ && mE;
+});
+renderPresupuestos(filtrados);
+}
+function verPresupuesto(id) {
+const p = presupuestos.find(x => x.ID === id);
+if (!p) return;
+document.getElementById('pres-det-ttl').textContent = p.DESCRIPCION || 'Presupuesto';
+const vence = p.FECHA_VENCIMIENTO ? new Date(p.FECHA_VENCIMIENTO) : null;
+const venceStr = vence && !isNaN(vence) ? vence.toLocaleDateString('es-AR') : '—';
+document.getElementById('pres-det-body').innerHTML =
+'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">' +
+badgePres(p.ESTADO) +
+'<span class="td-mono">#' + p.ID + '</span>' +
+'</div>' +
+'<div style="background:var(--bg4);border-radius:var(--r);padding:14px;margin-bottom:12px">' +
+'<div class="det-row"><span class="det-lbl">Cliente</span><span class="det-val">' + (p['CLIENTE NOMBRE']||'—') + '</span></div>' +
+'<div class="det-row"><span class="det-lbl">Fecha</span><span class="det-val">' + (p.FECHA||'—') + '</span></div>' +
+'<div class="det-row"><span class="det-lbl">Vence</span><span class="det-val">' + venceStr + '</span></div>' +
+'<div class="det-row"><span class="det-lbl">Materiales</span><span class="det-val">' + (p.MATERIALES||'—') + '</span></div>' +
+'</div>' +
+'<div style="background:var(--bg4);border-radius:var(--r);padding:14px;margin-bottom:12px">' +
+'<div style="font-size:11px;color:var(--t4);font-weight:600;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Detalle del servicio</div>' +
+'<div style="font-size:13px;color:var(--t2);line-height:1.65">' + (p.DETALLE||p.DESCRIPCION||'—') + '</div>' +
+'</div>' +
+'<div class="total-box">' +
+'<span class="total-lbl">Monto presupuestado</span>' +
+'<span class="total-val">$ ' + parseFloat(p.MONTO||0).toLocaleString('es-AR') + '</span>' +
+'</div>';
+let acciones = '';
+if (p.ESTADO === 'Pendiente de aprobación') {
+acciones +=
+'<button class="btn btn-g" onclick="cambiarEstadoPres('' + id + '','Aprobado')">' +
+'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' +
+'Aprobar' +
+'</button>' +
+'<button class="btn btn-d" onclick="cambiarEstadoPres('' + id + '','Rechazado')">' +
+'Rechazar' +
+'</button>';
+}
+if (p.ESTADO === 'Aprobado') {
+acciones +=
+'<button class="btn btn-g" onclick="convertirEnOrden('' + id + '')">' +
+'<svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>' +
+'Convertir en orden' +
+'</button>';
+}
+acciones +=
+'<button class="btn btn-o" onclick="enviarWAPres('' + id + '')">' +
+'Enviar por WA' +
+'</button>' +
+'<button class="btn btn-o" onclick="closeMO('mo-pres-det')">Cerrar</button>';
+document.getElementById('pres-det-ftr').innerHTML = acciones;
+openMO('mo-pres-det');
+}
+async function crearPresupuesto() {
+const cliId = document.getElementById('p-cli-id').value;
+const desc = document.getElementById('p-desc').value.trim();
+const monto = parseFloat(document.getElementById('p-monto').value) || 0;
+if (!cliId || !desc) { alert('Seleccioná un cliente y escribí la descripción.'); return; }
+const validez = parseInt(document.getElementById('p-validez').value) || 7;
+const vence = new Date();
+vence.setDate(vence.getDate() + validez);
+const btn = document.getElementById('btn-crear-pres');
+btn.textContent = 'Creando...'; btn.disabled = true;
+const body = {
+clienteId: cliId,
+descripcion: desc,
+detalle: document.getElementById('p-detalle').value,
+monto,
+materiales: document.getElementById('p-mat').value,
+fechaVencimiento: vence.toISOString(),
+validezDias: validez,
+};
+const r = await api('crearPresupuesto', body);
+btn.textContent = 'Crear y enviar por WA'; btn.disabled = false;
+if (r && r.ok !== false) {
+closeMO('mo-presupuesto');
+await cargarPresupuestos();
+if (r.id) enviarWAPres(r.id);
+alert('Presupuesto creado correctamente.');
+} else {
+alert(r?.error || 'Error al crear presupuesto.');
+}
+}
+async function cambiarEstadoPres(id, nuevoEstado) {
+const r = await api('editarPresupuesto', { id, estado: nuevoEstado });
+if (r && r.ok !== false) {
+const p = presupuestos.find(x => x.ID === id);
+if (p) p.ESTADO = nuevoEstado;
+closeMO('mo-pres-det');
+renderPresupuestos(presupuestos);
+if (nuevoEstado === 'Aprobado') {
+if (confirm('Presupuesto aprobado. ¿Querés convertirlo en orden de trabajo ahora?')) {
+convertirEnOrden(id);
+}
+}
+}
+}
+async function convertirEnOrden(id) {
+const p = presupuestos.find(x => x.ID === id);
+if (!p) return;
+const btn_txt = 'Convirtiendo...';
+const r = await api('convertirPresupuesto', { id });
+if (r && r.ok !== false) {
+closeMO('mo-pres-det');
+const p2 = presupuestos.find(x => x.ID === id);
+if (p2) p2.ESTADO = 'Aprobado';
+await cargarPresupuestos();
+await loadTareas();
+await loadStats();
+alert('Orden de trabajo creada correctamente. Podés verla en Ordenes.');
+goTo('ordenes', null);
+} else {
+alert(r?.error || 'Error al convertir presupuesto.');
+}
+}
+function enviarWAPres(id) {
+const p = presupuestos.find(x => x.ID === id);
+if (!p) return;
+const cli = ST.clientes.find(c => c.ID === p.CLIENTE_ID || c.NOMBRE === p['CLIENTE NOMBRE']);
+let tel = (cli?.TELEFONO || p.TELEFONO || '').toString().trim().replace(/\s/g,'');
+if (!tel) { alert('El cliente no tiene teléfono registrado.'); return; }
+if (!tel.startsWith('+')) tel = '+' + tel;
+const telWA = tel.replace(/\D/g,'');
+const vence = p.FECHA_VENCIMIENTO ? new Date(p.FECHA_VENCIMIENTO).toLocaleDateString('es-AR') : '';
+const msg =
+'Hola ' + (p['CLIENTE NOMBRE']||'') + '! ' +
+'Te envio el presupuesto para: *' + p.DESCRIPCION + '*' +
+(p.DETALLE ? '\n' + p.DETALLE : '') +
+'\n\n*Monto: $' + parseFloat(p.MONTO||0).toLocaleString('es-AR') + ' ARS*' +
+(vence ? '\nValido hasta: ' + vence : '') +
+'\n\nPor favor avisame si lo aprobas para coordinar el trabajo. Gracias por confiar en ' + ST.nom + '!';
+const url = 'https://wa.me/' + telWA + '?text=' + encodeURIComponent(msg);
+const existing = document.getElementById('wa-modal');
+if (existing) existing.remove();
+const modal = document.createElement('div');
+modal.id = 'wa-modal';
+modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+const inner = document.createElement('div');
+inner.style.cssText = 'background:#0D1612;border:1px solid rgba(24,255,138,.2);border-radius:16px;padding:24px;max-width:400px;width:100%';
+const ttl = document.createElement('div');
+ttl.style.cssText = 'font-size:15px;font-weight:700;color:#E2EDE7;margin-bottom:6px';
+ttl.textContent = 'Enviar presupuesto por WhatsApp';
+const sub = document.createElement('div');
+sub.style.cssText = 'font-size:12px;color:#8AA898;margin-bottom:14px';
+sub.textContent = 'Para: ' + (p['CLIENTE NOMBRE']||'') + ' · ' + tel;
+const prev = document.createElement('div');
+prev.style.cssText = 'background:#111A16;border:1px solid rgba(24,255,138,.1);border-radius:8px;padding:12px;font-size:12px;color:#8AA898;line-height:1.6;margin-bottom:16px;max-height:120px;overflow-y:auto;white-space:pre-wrap';
+prev.textContent = msg.replace(/\*/g,'');
+const btnWA = document.createElement('a');
+btnWA.href = url; btnWA.target = '_blank'; btnWA.rel = 'noopener';
+btnWA.style.cssText = 'display:flex;align-items:center;justify-content:center;gap:8px;background:#1D9E75;color:#fff;font-weight:600;font-size:14px;padding:13px;border-radius:8px;text-decoration:none;margin-bottom:8px';
+btnWA.textContent = 'Abrir WhatsApp';
+btnWA.addEventListener('click', function(){ setTimeout(function(){ const m=document.getElementById('wa-modal'); if(m) m.remove(); }, 400); });
+const btnX = document.createElement('button');
+btnX.style.cssText = 'width:100%;background:none;border:1px solid rgba(255,255,255,.15);color:#8AA898;font-size:13px;padding:10px;border-radius:8px;cursor:pointer';
+btnX.textContent = 'Cancelar';
+btnX.addEventListener('click', function(){ modal.remove(); });
+inner.appendChild(ttl); inner.appendChild(sub); inner.appendChild(prev);
+inner.appendChild(btnWA); inner.appendChild(btnX);
+modal.appendChild(inner);
+document.body.appendChild(modal);
+modal.addEventListener('click', function(e){ if(e.target===modal) modal.remove(); });
+}
+function mostrarNotifPendientes() {
+const pendientes = ST.tareas.filter(t => t.ESTADO === 'Pendiente' && t.ESTADO !== 'Eliminado');
+const enProceso = ST.tareas.filter(t => t.ESTADO === 'En proceso');
+const wrap = document.getElementById('alert-wrap');
+if (!wrap) return;
+if (pendientes.length === 0 && enProceso.length === 0) return;
+const dismissed = localStorage.getItem('td_notif_dismissed');
+if (dismissed === new Date().toDateString()) return;
+let lista = '';
+const todas = [...enProceso, ...pendientes].slice(0, 5);
+todas.forEach(t => {
+const badge = t.ESTADO === 'En proceso'
+? '<span class="badge bb" style="font-size:10px">En proceso</span>'
+: '<span class="badge ba" style="font-size:10px">Pendiente</span>';
+lista += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">' + badge + '<span>' + (t['TAREA REALIZADA']||'Sin título') + ' — ' + (t['CLIENTE NOMBRE']||'') + '</span></div>';
+});
+if (pendientes.length + enProceso.length > 5) {
+lista += '<div style="color:var(--t3);font-size:11px;margin-top:4px">...y ' + (pendientes.length + enProceso.length - 5) + ' más</div>';
+}
+wrap.innerHTML =
+'<div class="notif-banner">' +
+'<div class="notif-banner-icon"><svg width="18" height="18" fill="none" stroke="' + 'var(--amber)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>' +
+'<div class="notif-banner-body">' +
+'<div class="notif-banner-title">Tenés ' + (pendientes.length + enProceso.length) + ' orden' + (pendientes.length + enProceso.length !== 1 ? 'es' : '') + ' sin finalizar</div>' +
+'<div class="notif-banner-list">' + lista + '</div>' +
+'</div>' +
+'<button class="notif-banner-close" onclick="cerrarNotif()" title="Cerrar">x</button>' +
+'</div>';
+}
+function cerrarNotif() {
+localStorage.setItem('td_notif_dismissed', new Date().toDateString());
+const wrap = document.getElementById('alert-wrap');
+if (wrap) wrap.innerHTML = '';
+}
+async function cargarUsuarios() {
+const r = await api('getUsuarios');
+if (!r || !r.usuarios) return;
+renderUsuarios(r.usuarios);
+}
+function renderUsuarios(lista) {
+const wrap = document.getElementById('lista-usuarios');
+if (!wrap) return;
+if (!lista.length) { wrap.innerHTML = '<div class="empty"><p>No hay usuarios registrados.</p></div>'; return; }
+wrap.innerHTML = lista.map(u => {
+const ini = (u.INICIALES || (u.USUARIO||'??').substring(0,2)).toUpperCase();
+const rol = (u.ROL||'tecnico').toLowerCase();
+const act = String(u.ACTIVO) !== 'false' && u.ACTIVO !== false;
+return '<div class="user-row">' +
+'<div class="user-av-sm">' + ini + '</div>' +
+'<div class="user-info">' +
+'<div class="user-info-nm">' + (u.NOMBRE||u.USUARIO) + '</div>' +
+'<div class="user-info-sub">@' + u.USUARIO + ' · ' + (act ? 'Activo' : '<span style="color:var(--red)">Desactivado</span>') + '</div>' +
+'</div>' +
+'<span class="role-badge ' + (rol === 'admin' ? 'role-admin' : 'role-tecnico') + '">' + rol + '</span>' +
+'<button class="btn btn-o btn-xs" style="margin-left:8px" onclick="editarUsuario(' + JSON.stringify(u) + ')">Editar</button>' +
+'</div>';
+}).join('');
+}
+function editarUsuario(u) {
+document.getElementById('nu-titulo').textContent = 'Editar usuario';
+document.getElementById('nu-id').value = u.ID || '';
+document.getElementById('nu-nombre').value = u.NOMBRE || '';
+document.getElementById('nu-ini').value = u.INICIALES || '';
+document.getElementById('nu-user').value = u.USUARIO || '';
+document.getElementById('nu-pass').value = '';
+document.getElementById('nu-pass').placeholder = 'Dejar vacío para no cambiar';
+document.getElementById('nu-rol').value = (u.ROL||'tecnico').toLowerCase();
+document.getElementById('nu-activo').value = String(u.ACTIVO) === 'false' ? 'false' : 'true';
+document.getElementById('nu-activo-grp').style.display = 'block';
+openMO('mo-nuevo-usuario');
+}
+async function guardarUsuario() {
+const id = document.getElementById('nu-id').value;
+const nombre = document.getElementById('nu-nombre').value.trim();
+const user = document.getElementById('nu-user').value.trim().toLowerCase();
+const pass = document.getElementById('nu-pass').value;
+const rol = document.getElementById('nu-rol').value;
+const ini = document.getElementById('nu-ini').value.trim() || nombre.split(' ').map(w=>w[0]).slice(0,2).join('').toUpperCase();
+const activo = document.getElementById('nu-activo').value;
+if (!nombre || !user) { alert('Nombre y usuario son obligatorios.'); return; }
+if (!id && !pass) { alert('La contraseña es obligatoria para usuarios nuevos.'); return; }
+const btn = document.getElementById('btn-guardar-usuario');
+btn.textContent = 'Guardando...'; btn.disabled = true;
+const body = { nombre, usuario: user, rol, iniciales: ini, activo };
+if (pass) body.pass = pass;
+const action = id ? 'editarUsuario' : 'crearUsuario';
+if (id) body.id = id;
+const r = await api(action, body);
+btn.textContent = 'Guardar usuario'; btn.disabled = false;
+if (r && r.ok !== false) {
+closeMO('mo-nuevo-usuario');
+document.getElementById('nu-id').value = '';
+document.getElementById('nu-activo-grp').style.display = 'none';
+document.getElementById('nu-titulo').textContent = 'Nuevo usuario';
+cargarUsuarios();
+alert('Usuario guardado correctamente');
+} else {
+alert(r?.error || 'Error al guardar usuario');
+}
+}
+function saveURL(){
+ST.api=document.getElementById('cfg-url').value.trim();
+localStorage.setItem('td_api',ST.api);
+updConn();loadAll();
+document.getElementById('test-r').innerHTML='<span style="color:var(--g)">URL guardada. Cargando datos...</span>';
+}
+async function testConn(){
+const r=document.getElementById('test-r');
+r.innerHTML='<span style="color:var(--t3)">Probando...</span>';
+const d=await api('ping');
+if(d?.pong){
+r.innerHTML='<span style="color:var(--g)">✓ Conexión OK · '+d.ts+'</span>';
+setConn(true);
+} else {
+r.innerHTML='<span style="color:var(--red)">✗ No se pudo conectar. Verificá la URL y que el Web App esté publicado con acceso "Cualquiera".</span>';
+setConn(false);
+}
+}
+function saveCfg(){
+ST.nom=document.getElementById('cfg-nom').value||ST.nom;
+ST.ini=document.getElementById('cfg-ini').value||ST.ini;
+ST.slg=document.getElementById('cfg-slg').value||ST.slg;
+localStorage.setItem('td_nom',ST.nom);
+localStorage.setItem('td_ini',ST.ini);
+localStorage.setItem('td_slg',ST.slg);
+document.getElementById('uav').textContent=ST.ini;
+document.getElementById('unm').textContent=ST.nom;
+alert('✓ Configuración guardada');
+}
+function updConn(){setConn(!!ST.api)}
+function setConn(ok){
+document.getElementById('cdot').className='conn-dot'+(ok?' ok':' err');
+document.getElementById('ctxt').textContent=ok?'Conectado':'Sin conectar';
+}
+function showAlert(){
+if(localStorage.getItem('td_api')) return;
+document.getElementById('alert-wrap').innerHTML=`
+<div class="alert-banner"><svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+No configuraste tu Apps Script todavía.
+<button class="btn btn-o btn-xs" onclick="goTo('config',null)" style="margin-left:auto">Configurar →</button></div>`;
+}
+function openMO(id){document.getElementById(id).classList.add('open')}
+function closeMO(id){document.getElementById(id).classList.remove('open')}
+const SYS=()=>`Sos el asistente de ${ST.nom}, un sistema de gestión de servicios técnicos.
+Datos actuales del negocio:
+- Clientes registrados: ${ST.clientes.length}
+- Total órdenes: ${ST.tareas.length}
+- Finalizadas: ${ST.stats.porEstado?.Finalizada||0} · En proceso: ${ST.stats.porEstado?.['En proceso']||0} · Pendientes: ${ST.stats.porEstado?.Pendiente||0}
+- Facturado este mes: $${Math.round(ST.stats.totalFacturadoMes||0).toLocaleString('es-AR')} ARS
+- Top clientes: ${(ST.stats.topClientes||[]).slice(0,3).map(c=>c.nombre+' ($'+Math.round(c.total).toLocaleString('es-AR')+')').join(', ')||'sin datos'}
+Podés ayudar con: presupuestos, precios del mercado argentino, mensajes de WhatsApp, resúmenes, diagnóstico técnico, consejos de negocio.
+Respondé en español rioplatense, de forma práctica y concisa. Máximo 160 palabras salvo que pidan algo largo.`;
+async function sendAI(){
+const inp=document.getElementById('ai-in');
+const txt=inp.value.trim();
+if(!txt) return;
+inp.value='';
+addMsg(txt,'u');
+ST.aiHist.push({role:'user',content:txt});
+document.getElementById('ai-chips').style.display='none';
+const typ=addTyping();
+try{
+const r=await fetch('https://api.anthropic.com/v1/messages',{
+method:'POST',headers:{'Content-Type':'application/json'},
+body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,
+system:SYS(),messages:ST.aiHist})});
+const d=await r.json();
+typ.remove();
+const rep=d.content?.map(b=>b.text||'').join('')||'No pude generar respuesta.';
+addMsg(rep,'b');
+ST.aiHist.push({role:'assistant',content:rep});
+}catch(e){typ.remove();addMsg('Error de conexión con la IA.','b');}
+}
+function askAI(t){document.getElementById('ai-in').value=t;sendAI()}
+function addMsg(txt,role){
+const w=document.getElementById('ai-msgs');
+const d=document.createElement('div');
+d.className='ai-m '+role;d.textContent=txt;
+w.appendChild(d);d.scrollIntoView({behavior:'smooth',block:'end'});
+return d;
+}
+function addTyping(){
+const w=document.getElementById('ai-msgs');
+const d=document.createElement('div');
+d.className='ai-m b';
+d.innerHTML='<div class="typing"><span></span><span></span><span></span></div>';
+w.appendChild(d);d.scrollIntoView({behavior:'smooth',block:'end'});
+return d;
+}
+
+</script><script>const manifest = {
 name: "TechDesk",
 short_name: "TechDesk",
 description: "Sistema de gestión de servicios técnicos",
