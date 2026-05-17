@@ -194,7 +194,6 @@ async function api(action, body) {
     console.warn('API error:', e);
     return null;
   }
-}catch(e){console.warn('API',e);return null;}
 }
 async function loadStats(){
 const d=await api('getStats');
