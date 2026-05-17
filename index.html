@@ -820,12 +820,20 @@ updConn();loadAll();
 document.getElementById('test-r').innerHTML='<span style="color:var(--g)">URL guardada. Cargando datos...</span>';
 }
 async function testConn(){
-const r=document.getElementById('test-r');
-r.innerHTML='<span style="color:var(--t3)">Probando...</span>';
-const d=await api('ping');
-if(d?.pong){
-r.innerHTML='<span style="color:var(--g)">✓ Conexión OK · '+d.ts+'</span>';
-setConn(true);
+  const r = document.getElementById('test-r');
+  r.innerHTML = '<span style="color:var(--t3)">Probando...</span>';
+  const urlInput = document.getElementById('cfg-url').value.trim();
+  const prevApi = ST.api;
+  if (urlInput) ST.api = urlInput;
+  const d = await api('ping');
+  ST.api = prevApi;
+  if (d && d.pong) {
+    r.innerHTML = '<span style="color:var(--g)">✓ Conexión OK · ' + d.ts + '</span>';
+    setConn(true);
+  } else {
+    r.innerHTML = '<span style="color:var(--red)">✗ No se pudo conectar. Verificá que la URL sea correcta y el acceso sea Cualquier usuario.</span>';
+    setConn(false);
+  }
 } else {
 r.innerHTML='<span style="color:var(--red)">✗ No se pudo conectar. Verificá la URL y que el Web App esté publicado con acceso "Cualquiera".</span>';
 setConn(false);
