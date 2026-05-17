@@ -172,7 +172,7 @@ function toggleSB(){
 const sb=document.getElementById('sidebar');
 sb.style.display=sb.style.display==='none'?'flex':'none';
 }
-// API via proxy to bypass CORS with Apps Script
+// API via Cloudflare Worker proxy (bypass CORS)
 async function api(action, body) {
   if (!ST.api) return null;
   try {
@@ -186,18 +186,11 @@ async function api(action, body) {
       return encodeURIComponent(kv[0]) + '=' + encodeURIComponent(kv[1]);
     }).join('&');
     const targetUrl = ST.api + '?' + params;
-    const proxyUrl = 'https://api.allorigins.win/get?url=' + encodeURIComponent(targetUrl);
+    const proxyUrl = 'https://techdesk-proxy.palomojuan-int.workers.dev/?url=' + encodeURIComponent(targetUrl);
     const res = await fetch(proxyUrl);
-    const data = await res.json();
-    if (data && data.contents) {
-      try { return JSON.parse(data.contents); }
-      catch(e) {
-        // Try to extract JSON from JSONP response
-        const match = data.contents.match(/\{.*\}/s);
-        if (match) return JSON.parse(match[0]);
-      }
-    }
-    return null;
+    const text = await res.text();
+    try { return JSON.parse(text); }
+    catch(e) { console.warn('Parse error:', text.substring(0,200)); return null; }
   } catch(e) {
     console.warn('API error:', e);
     return null;
