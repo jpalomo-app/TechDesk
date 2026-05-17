@@ -61,7 +61,7 @@ Guardar y generar PDF
 Guardar cliente
 </button></div></div></div><div class="mo" id="mo-det" onclick="if(event.target===this)closeMO('mo-det')"><div class="modal" style="max-width:580px"><div class="mhdr"><span class="mttl" id="det-ttl">Orden</span><button class="xbtn" onclick="closeMO('mo-det')">×</button></div><div class="mbdy" id="det-body"></div><div class="mftr" id="det-ftr"></div></div></div><script>
 const ST = {
-api: localStorage.getItem('td_api')||'https://script.google.com/macros/s/AKfycbyzTN4TfQK7hkU9oMyxnqrMXb8bgAr3T4dMOh8677ij3iJVgdf7KfUFcuLCme5jrVzI/exec',
+api: localStorage.getItem('td_api')||'https://script.google.com/macros/s/AKfycbxAXWUGy9aPaYSefKasPcf803cg22PkvRqnOj-_CTYpA3oQZSCYIh4U9hsc1Pe4a9u6/exec',
 nom: localStorage.getItem('td_nom')||'JM Informática',
 ini: localStorage.getItem('td_ini')||'JM',
 slg: localStorage.getItem('td_slg')||'Servicio Técnico Profesional',
@@ -172,15 +172,51 @@ function toggleSB(){
 const sb=document.getElementById('sidebar');
 sb.style.display=sb.style.display==='none'?'flex':'none';
 }
-async function api(action,body){
-if(!ST.api) return null;
-try{
-const opts=body
-?{method:'POST',body:JSON.stringify({action,...body})}
-:{method:'GET'};
-const url=body?ST.api:ST.api+'?action='+action;
-const r=await fetch(url,opts);
-return await r.json();
+// JSONP-based API call to bypass CORS
+function api(action, body) {
+  return new Promise(function(resolve) {
+    if (!ST.api) { resolve(null); return; }
+    try {
+      const flat = { action: action };
+      if (body) {
+        Object.entries(body).forEach(function(kv) {
+          flat[kv[0]] = typeof kv[1] === 'object' ? JSON.stringify(kv[1]) : kv[1];
+        });
+      }
+      const cbName = 'cb_' + Math.random().toString(36).substr(2, 8);
+      flat['callback'] = cbName;
+      const params = Object.entries(flat).map(function(kv) {
+        return encodeURIComponent(kv[0]) + '=' + encodeURIComponent(kv[1]);
+      }).join('&');
+      const url = ST.api + '?' + params;
+      window[cbName] = function(data) {
+        delete window[cbName];
+        const script = document.getElementById(cbName);
+        if (script) script.remove();
+        resolve(data);
+      };
+      const script = document.createElement('script');
+      script.id = cbName;
+      script.src = url;
+      script.onerror = function() {
+        delete window[cbName];
+        script.remove();
+        resolve(null);
+      };
+      setTimeout(function() {
+        if (window[cbName]) {
+          delete window[cbName];
+          const s = document.getElementById(cbName);
+          if (s) s.remove();
+          resolve(null);
+        }
+      }, 15000);
+      document.head.appendChild(script);
+    } catch(e) {
+      console.warn('API error:', e);
+      resolve(null);
+    }
+  });
 }catch(e){console.warn('API',e);return null;}
 }
 async function loadStats(){
