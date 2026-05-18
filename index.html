@@ -61,7 +61,7 @@ Guardar y generar PDF
 Guardar cliente
 </button></div></div></div><div class="mo" id="mo-det" onclick="if(event.target===this)closeMO('mo-det')"><div class="modal" style="max-width:580px"><div class="mhdr"><span class="mttl" id="det-ttl">Orden</span><button class="xbtn" onclick="closeMO('mo-det')">×</button></div><div class="mbdy" id="det-body"></div><div class="mftr" id="det-ftr"></div></div></div><script>
 const ST = {
-api: localStorage.getItem('td_api')||'https://script.google.com/macros/s/AKfycbwND_gvbUaaOpMdAJoOjH15MHzbMvNzDTk-TeEJTVval_DvoyDw5f-kOEpx6auyevdA/exec',
+api: localStorage.getItem('td_api')||'https://script.google.com/macros/s/AKfycbxlgDwKDbAaQJ61gmb1CphRYFiqI7UI1V6BtD9rXAi3LqgMvtlbSIuGbat5BzYmXCq-/exec',
 nom: localStorage.getItem('td_nom')||'JM Informática',
 ini: localStorage.getItem('td_ini')||'JM',
 slg: localStorage.getItem('td_slg')||'Servicio Técnico Profesional',
@@ -167,15 +167,15 @@ function toggleSB(){
 const sb=document.getElementById('sidebar');
 sb.style.display=sb.style.display==='none'?'flex':'none';
 }
-async function api(action, body) {
-  if (!ST.api) return null;
-  try {
-    const flat = {action: action};
-    if (body) {
-      Object.entries(body).forEach(function(kv) {
-        flat[kv[0]] = typeof kv[1] === 'object' ? JSON.stringify(kv[1]) : String(kv[1]);
-      });
-    }
+function api(action, body) {
+  return new Promise((resolve) => {
+    const payload = JSON.stringify({action, ...(body||{})});
+    google.script.run
+      .withSuccessHandler(r => resolve(JSON.parse(r)))
+      .withFailureHandler(e => { console.warn('API', e); resolve(null); })
+      .serverCall(payload);
+  });
+}
     const params = Object.entries(flat).map(function(kv) {
       return encodeURIComponent(kv[0]) + '=' + encodeURIComponent(kv[1]);
     }).join('&');
