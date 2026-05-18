@@ -219,9 +219,52 @@ hr.div{border:none;border-top:1px solid var(--b);margin:14px 0}
   .toolbar{flex-direction:column;align-items:stretch}
   .toolbar-left{flex-direction:column}
 }
+/* ─── LOGIN OVERLAY ─────────────────────────── */
+.login-wrap{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px}
+.login-box{width:100%;max-width:380px;background:var(--bg2);border:1px solid var(--b2);border-radius:var(--r3);padding:36px 32px}
+.login-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px}
+.login-logo .logo-icon{width:40px;height:40px;background:var(--g);border-radius:10px;display:flex;align-items:center;justify-content:center}
+.login-logo .logo-icon svg{width:22px;height:22px;color:#09100D}
+.login-ttl{font-size:20px;font-weight:700;color:var(--t);letter-spacing:-.3px}
+.login-sub{font-size:12px;color:var(--t3);margin-top:2px}
+.login-err{background:rgba(255,92,92,.12);border:1px solid rgba(255,92,92,.3);color:#FF5C5C;border-radius:var(--r);padding:10px 12px;font-size:13px;margin-bottom:16px;display:none}
+.login-err.show{display:block}
+.pw-wrap{position:relative}
+.pw-wrap input{width:100%;padding-right:42px}
+.pw-eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--t3);padding:4px;display:flex;align-items:center}
 </style>
 </head>
 <body>
+
+<!-- ═══ LOGIN ════════════════════════════════════════════════ -->
+<div class="login-wrap" id="login-wrap">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="logo-icon">
+        <svg fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      </div>
+      <div><div class="login-ttl">TechDesk</div><div class="login-sub">JM Informática</div></div>
+    </div>
+    <div class="login-err" id="login-err"></div>
+    <div class="form-grp">
+      <label class="form-lbl">Usuario</label>
+      <input class="form-inp" id="l-usr" type="text" placeholder="tu usuario" autocomplete="username"
+        onkeydown="if(event.key==='Enter')document.getElementById('l-pwd').focus()">
+    </div>
+    <div class="form-grp">
+      <label class="form-lbl">Contraseña</label>
+      <div class="pw-wrap">
+        <input class="form-inp" id="l-pwd" type="password" placeholder="••••••••" autocomplete="current-password"
+          onkeydown="if(event.key==='Enter')doLogin()">
+        <button class="pw-eye" type="button" onclick="togglePass('l-pwd',this)" tabindex="-1">
+          <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+    <button class="btn btn-g" style="width:100%;margin-top:8px;justify-content:center" id="l-btn" onclick="doLogin()">Ingresar</button>
+  </div>
+</div>
+
 <div class="app">
 
 <!-- ═══ SIDEBAR ═══════════════════════════════════════════ -->
@@ -269,6 +312,9 @@ hr.div{border:none;border-top:1px solid var(--b);margin:14px 0}
       <div class="user-av" id="uav">JM</div>
       <div><div class="user-nm" id="unm">JM Informática</div><div class="user-rl">Administrador</div></div>
     </div>
+    <button onclick="doLogout()" title="Cerrar sesión" style="background:none;border:none;cursor:pointer;color:var(--t3);padding:4px 6px;border-radius:6px;display:flex;align-items:center" onmouseover="this.style.color='var(--red)'" onmouseout="this.style.color='var(--t3)'">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
   </div>
 </aside>
 
@@ -643,18 +689,64 @@ hr.div{border:none;border-top:1px solid var(--b);margin:14px 0}
 <script>
 // ─── STATE ────────────────────────────────────────────────
 const ST = {
-  api: localStorage.getItem('td_api')||'https://script.google.com/macros/s/AKfycbyW7F8kj41a20mGuKArGWcqit0OLt9Axpnvq_7WvC9FMZWpBO7rs5XKE3kynkuowvZ3/exec',
+  api: localStorage.getItem('td_api')||'https://script.google.com/macros/s/AKfycbwpZVjg8CBSspzFBNa7CAsc0bvW-L_6DCWCLDkHkJkUJlyAPK4Bgh07LDd_KAttTPhW/exec',
   nom: localStorage.getItem('td_nom')||'JM Informática',
   ini: localStorage.getItem('td_ini')||'JM',
   slg: localStorage.getItem('td_slg')||'Servicio Técnico Profesional',
   tareas:[],clientes:[],stats:{},aiHist:[],chartsOk:false
 };
 
+// ─── LOGIN ────────────────────────────────────────────────
+const sesion = JSON.parse(localStorage.getItem('td_sesion')||'null');
+
+async function doLogin(){
+  const usr=document.getElementById('l-usr').value.trim();
+  const pwd=document.getElementById('l-pwd').value;
+  const err=document.getElementById('login-err');
+  const btn=document.getElementById('l-btn');
+  if(!usr||!pwd){err.textContent='Completá usuario y contraseña.';err.classList.add('show');return;}
+  btn.disabled=true;btn.textContent='Ingresando...';
+  err.classList.remove('show');
+  const r=await api('login',{usuario:usr,pass:pwd});
+  btn.disabled=false;btn.textContent='Ingresar';
+  if(!r||!r.ok){
+    err.textContent=r?.error||'No se pudo conectar con el servidor.';
+    err.classList.add('show');return;
+  }
+  localStorage.setItem('td_sesion',JSON.stringify(r.usuario));
+  document.getElementById('uav').textContent=r.usuario.iniciales||r.usuario.usuario.substring(0,2).toUpperCase();
+  document.getElementById('unm').textContent=r.usuario.nombre||r.usuario.usuario;
+  document.getElementById('login-wrap').style.display='none';
+  loadAll();
+}
+
+function doLogout(){
+  localStorage.removeItem('td_sesion');
+  location.reload();
+}
+
+function togglePass(inputId,btn){
+  const inp=document.getElementById(inputId);
+  if(inp.type==='password'){
+    inp.type='text';
+    btn.innerHTML='<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  } else {
+    inp.type='password';
+    btn.innerHTML='<svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+  }
+}
+
 // ─── INIT ─────────────────────────────────────────────────
 addEventListener('DOMContentLoaded',()=>{
   loadCfgUI();
   updConn();
-  if(ST.api) loadAll(); else showAlert();
+  if(sesion){
+    document.getElementById('uav').textContent=sesion.iniciales||sesion.usuario.substring(0,2).toUpperCase();
+    document.getElementById('unm').textContent=sesion.nombre||sesion.usuario;
+    document.getElementById('login-wrap').style.display='none';
+    if(ST.api) loadAll(); else showAlert();
+  }
+  // si no hay sesión, el login-wrap queda visible
 });
 
 function loadCfgUI(){
