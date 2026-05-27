@@ -945,7 +945,7 @@ document.getElementById('ai-chips').style.display='none';
 const typ=addTyping();
 try{
 const r=await fetch('https://api.anthropic.com/v1/messages',{
-method:'POST',headers:{'Content-Type':'application/json','x-api-key':'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','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+method:'POST',headers:{'Content-Type':'application/json','x-api-key':'TU-API-KEY','anthropic-dangerous-direct-browser-access':'true'},
 body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,
 system:SYS(),messages:ST.aiHist})});
 const d=await r.json();
