@@ -482,18 +482,24 @@ sel.innerHTML='<option value="">Seleccioná un cliente...</option>'+
 ST.clientes.map(c=>`<option value="${c.ID}">${c.NOMBRE}</option>`).join('');
 }
 async function crearCliente(){
-const b={
-nombre:document.getElementById('c-nom').value,
-tipo:document.getElementById('c-tipo').value,
-telefono:document.getElementById('c-tel').value,
-email:document.getElementById('c-mail').value,
-direccion:document.getElementById('c-dir').value,
-notas:document.getElementById('c-notas').value,
-};
-if(!b.nombre){alert('El nombre es obligatorio.');return;}
-closeMO('mo-cliente');
-const r=await api('crearCliente',b);
-if(r?.ok){loadClientes();alert('✓ Cliente creado');}
+  const nombre = document.getElementById('c-nom').value.trim();
+  const tipo   = document.getElementById('c-tipo').value;
+  const tel    = document.getElementById('c-tel').value.trim();
+  const email  = document.getElementById('c-mail').value.trim();
+  const dir    = document.getElementById('c-dir').value.trim();
+  const notas  = document.getElementById('c-notas').value.trim();
+  if(!nombre){ alert('El nombre es obligatorio.'); return; }
+  const btn = document.querySelector('#mo-cliente .btn-g');
+  if(btn){ btn.textContent='Guardando...'; btn.disabled=true; }
+  const r = await api('crearCliente', {nombre,tipo,telefono:tel,email,direccion:dir,notas});
+  if(btn){ btn.textContent='Guardar cliente'; btn.disabled=false; }
+  if(r && r.ok !== false){
+    closeMO('mo-cliente');
+    loadClientes();
+    alert('✓ Cliente creado correctamente');
+  } else {
+    alert('Error al crear cliente: ' + (r ? (r.error||'Sin respuesta del servidor') : 'No hubo respuesta — revisá la conexión'));
+  }
 }
 function renderTopCli(top){
 if(!top.length) return;
