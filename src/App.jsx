@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import Login from './pages/Login.jsx'
 import Layout from './components/Layout.jsx'
 import Dashboard from './pages/Dashboard.jsx'
@@ -8,6 +8,7 @@ import Ordenes from './pages/Ordenes.jsx'
 import Presupuestos from './pages/Presupuestos.jsx'
 import Historial from './pages/Historial.jsx'
 import Usuarios from './pages/Usuarios.jsx'
+import Reportes from './pages/Reportes.jsx'
 
 export default function App() {
   const [usuario, setUsuario] = useState(() => {
@@ -36,6 +37,7 @@ export default function App() {
           <Route path="/clientes" element={<Clientes usuario={usuario} />} />
           <Route path="/presupuestos" element={<Presupuestos usuario={usuario} />} />
           <Route path="/historial" element={<Historial />} />
+          <Route path="/reportes" element={<Reportes />} />
           {usuario.rol === 'admin' && (
             <Route path="/usuarios" element={<Usuarios usuario={usuario} />} />
           )}

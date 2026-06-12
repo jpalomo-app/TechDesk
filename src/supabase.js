@@ -176,6 +176,33 @@ export async function getStats() {
   return { totalMes, tareasMes, tareasTotal: data.length, porEstado, topClientes, evolucion }
 }
 
+// ─── Reportes ─────────────────────────────────────────────────────
+export async function getReporteMensual(anio, mes) {
+  const desde = `${anio}-${String(mes).padStart(2, '0')}-01`
+  const hasta = mes === 12
+    ? `${anio + 1}-01-01`
+    : `${anio}-${String(mes + 1).padStart(2, '0')}-01`
+
+  const [actual, anterior] = await Promise.all([
+    supabase.from('ordenes').select('*').eq('activo', true).gte('fecha', desde).lt('fecha', hasta).order('fecha', { ascending: false }),
+    supabase.from('ordenes').select('costos,estado').eq('activo', true).gte('fecha',
+      mes === 1 ? `${anio - 1}-12-01` : `${anio}-${String(mes - 1).padStart(2, '0')}-01`
+    ).lt('fecha', desde),
+  ])
+  if (actual.error) throw actual.error
+
+  const ordenes = actual.data || []
+  const prev = anterior.data || []
+
+  const totalActual = ordenes.reduce((s, o) => s + (parseFloat(o.costos) || 0), 0)
+  const totalAnterior = prev.reduce((s, o) => s + (parseFloat(o.costos) || 0), 0)
+
+  const porEstado = {}
+  ordenes.forEach(o => { const e = o.estado || 'Pendiente'; porEstado[e] = (porEstado[e] || 0) + 1 })
+
+  return { ordenes, totalActual, totalAnterior, porEstado, cantAnterior: prev.length }
+}
+
 // ─── Historial ────────────────────────────────────────────────────
 export async function getHistorial() {
   const { data, error } = await supabase
@@ -199,7 +226,8 @@ export async function addHistorial(tipo, tabla, registroId, campo, anterior, nue
 // ─── Usuarios / Auth ──────────────────────────────────────────────
 export async function loginUsuario(usuario, pass) {
   const { data, error } = await supabase
-    .from('usuarios')
+    
+    from('usuarios')
     .select('*')
     .eq('usuario', usuario.toLowerCase().trim())
     .eq('password', pass.trim())
