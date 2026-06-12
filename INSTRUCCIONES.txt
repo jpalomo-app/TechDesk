@@ -1,0 +1,65 @@
+==========================================
+  TECHDESK v2.0 - JM Informatica
+  React + Vite + Supabase
+==========================================
+
+PRIMERA VEZ (instalar dependencias):
+-------------------------------------
+Abri PowerShell o CMD en esta carpeta y ejecuta:
+  npm install
+
+INICIAR EN MODO DESARROLLO:
+-------------------------------------
+  npm run dev
+
+Luego abre en el navegador: http://localhost:5173
+
+Credenciales por defecto:
+  Usuario: admin
+  Password: admin123
+
+PARA PRODUCCION (generar archivos):
+-------------------------------------
+  npm run build
+Los archivos quedaran en la carpeta "dist/"
+
+
+ESTRUCTURA DEL PROYECTO:
+-------------------------------------
+src/
+  App.jsx           - Router principal + autenticacion
+  supabase.js       - Todas las funciones de base de datos
+  pages/
+    Login.jsx        - Pantalla de login
+    Dashboard.jsx    - Estadisticas y graficos
+    Ordenes.jsx      - Ordenes de servicio (+ PDF + WhatsApp)
+    Clientes.jsx     - Gestion de clientes
+    Presupuestos.jsx - Presupuestos (convertibles a orden)
+    Historial.jsx    - Auditoria de cambios
+    Usuarios.jsx     - Gestion de usuarios (solo admin)
+  components/
+    Layout.jsx       - Sidebar + navegacion
+    Modal.jsx        - Componente modal reutilizable
+    FormField.jsx    - Inputs, botones, etc.
+  utils/
+    pdf.js           - Generacion de PDF (abre ventana de impresion)
+    whatsapp.js      - Envio por WhatsApp via textmebot.com
+
+
+BASE DE DATOS (Supabase):
+-------------------------------------
+Proyecto: uhcocimybfgydaedixhl
+URL: https://uhcocimybfgydaedixhl.supabase.co
+Tablas: clientes, ordenes, presupuestos, usuarios, historial
+
+
+FUNCIONALIDADES:
+-------------------------------------
+- Login con usuarios propios (sin depender de Google)
+- Dashboard con stats del mes, por estado, top clientes, evolucion
+- Ordenes: crear, editar, eliminar, generar PDF, enviar WhatsApp
+- Clientes: CRUD completo con busqueda
+- Presupuestos: crear, editar, convertir a orden de servicio
+- Historial de auditoria
+- Gestion de usuarios (rol admin)
+==========================================
