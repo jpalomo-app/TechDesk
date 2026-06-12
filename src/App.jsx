@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useState } from 'react'
 import Login from './pages/Login.jsx'
 import Layout from './components/Layout.jsx'
@@ -28,7 +28,7 @@ export default function App() {
   if (!usuario) return <Login onLogin={login} />
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Routes>
         <Route element={<Layout usuario={usuario} onLogout={logout} />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
@@ -44,6 +44,6 @@ export default function App() {
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Route>
       </Routes>
-    </BrowserRouter>
+    </HashRouter>
   )
 }
